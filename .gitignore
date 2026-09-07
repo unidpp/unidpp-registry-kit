@@ -6,3 +6,4 @@ data/
 *.pid
 tunnel.token
 .DS_Store
+__pycache__/
