@@ -1,0 +1,8 @@
+# Runtime home: journals, logs, pid files, generated admin tokens,
+# cloudflared artifacts. Everything here is instance state, never source.
+data/
+
+*.log
+*.pid
+tunnel.token
+.DS_Store

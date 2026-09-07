@@ -1,0 +1,163 @@
+# unidpp-registry-kit
+
+National DPP registry starter kit: run your jurisdiction's registry as a
+federation peer — seeded, documented, enumeration-resistant. Memo work
+item R3: the reference deployment of what the UniDPP framework already
+runs, packaged as "your country's DPP registry in a box".
+
+## Why a starter kit — the ePassport precedent
+
+Every country that plans a DPP registry is right to want one — and the
+international standard's job is not to replace it but to make it work
+with everyone else's. The framework treats a national registry the way
+aviation treats a national passport authority: each state issues and
+inspects; the standard supplies the machine-readable format, the
+resolution protocol, and a multi-witnessed list of trust anchors that
+no single country controls. Your registry keeps your identifiers, your
+crypto, your surveillance access; the federation protocol is what your
+traders get in return — their products verified at every border without
+your registry asking anyone's permission, and without anyone browsing
+yours.
+
+The alternative futures are both worse: one central world registry is
+politically dead on arrival for every NSB that is not the first mover
+and architecturally fatal (a single enumeration surface over the
+world's installed base); N incompatible national silos make
+cross-border verification bilateral diplomacy per product. The national
+registry as **first-class peer in a federation** is the third path.
+
+## "Registry" is six functions — the decomposition
+
+The word conflates functions the framework already separates. A
+national "DPP Registry" typically bundles:
+
+| # | Function | Where it lives in this framework |
+|---|---|---|
+| F1 | Identifier allocation (minting/governing the national identifier space) | Registrar role under ISO/IEC 15459 issuing-agency discipline; national schemes (GS1/Handle/Ecode/MA) as C8 identifier-scheme items with registered bridges |
+| F2 | Discovery/lookup (identifier → where the passport is served) | C3 service (class `registry`, jurisdiction=X) + resolver linksets routing by request context; national mirrors |
+| F3 | Deposit of passport copies (where a regulator demands it) | A jurisdictional profile requirement, implemented as Tier-C notarized snapshots at a national archivist — authority never transfers with the copy (I7) |
+| F4 | Semantic definitions | National RA as a FERIN subregister (ISO 19135:2025; EPSG precedent) |
+| F5 | Trust (keys, accreditation) | Jurisdictional trust authority (threshold group) → trust list → M-of-K master list |
+| F6 | Surveillance (invalidations, recalls, theft) | Predicate subregisters + predicate-based recall; statuses with reason-coded retroactivity |
+
+This kit gives you F2's service-descriptor half, F4 in full, and the
+F5/F6 seams, on the running `unidpp-registry` service. Global elements
+stay tiny and governance-shaped (scheme namespaces, master trust list,
+cross-register mappings); everything data-shaped stays yours.
+
+## What is in the kit
+
+| File | Purpose |
+|---|---|
+| `bin/run-registry.sh` | Launcher: builds and runs `unidpp-registry` (path dependency `../unidpp-registry`) on a configurable port with a persistent append-only journal, guarded admin mutations, base dataset seeded via the API; optional cloudflared tunnel |
+| `bin/seed-jurisdiction.py` | Seeder parameterized by jurisdiction: the **signed C3 self-descriptor** (service class `registry`, jurisdiction=X), a jurisdiction profile item, a dated applicability binding, sample data-element items |
+| `bin/demo-jurisdiction.sh` | The worked example — a fictional "DE" jurisdiction end-to-end: as-of applicability, supersession, enumeration-resistance posture |
+| `ONBOARDING.md` | The ceremony guide for a country joining the federation: operator credential issuance, trust-list entry, discovery self-registration, continuity/succession filing, the conformance checklist |
+
+Prerequisites: Rust toolchain (to build the registry; a prebuilt binary
+is reused if present), Python 3.9+ with `cryptography`, `curl`, `jq`.
+`cloudflared` only if you pass `--tunnel`.
+
+## What to run
+
+```sh
+git clone https://github.com/unidpp/unidpp-registry-kit
+git clone https://github.com/unidpp/unidpp-registry   # sibling checkout (path dep)
+cd unidpp-registry-kit
+
+# 1. Run the registry (foreground; --daemon to background; --tunnel adds a
+#    public URL). Journal persists under data/; admin token in data/admin-token.
+bin/run-registry.sh --daemon
+
+# 2. Seed your jurisdiction (ISO 3166-1 alpha-2)
+bin/seed-jurisdiction.py --jurisdiction DE
+
+# 3. Or run the whole worked example in one command
+bin/demo-jurisdiction.sh
+```
+
+`bin/run-registry.sh stop` stops a daemon; the journal is never removed —
+restart replays it (durability and auditability are the same mechanism).
+
+Configuration (environment): `KIT_PORT` (default 8391; the UniDPP pilot
+lives on 8390), `KIT_BIND`, `KIT_HOME`, `KIT_REGISTRY_DIR`,
+`KIT_ADMIN_TOKEN` (default: generated once into `data/admin-token`),
+`KIT_FORCE_BUILD=1`.
+
+## What to query
+
+The registry is `unidpp-registry` — full API semantics in its README.
+The queries a federation peer or verifier runs:
+
+```sh
+BASE=http://127.0.0.1:8391
+
+# Discovery: which registry serves jurisdiction DE, at which endpoint,
+# under which wire grammar, signed by whom?
+curl -s "$BASE/services?jurisdiction=DE&class=registry" | jq
+
+# Point-in-time applicability: what applied to this product then?
+# (identity-keyed: you must hold the identity to ask)
+curl -s "$BASE/applicability?product_type=gtin:4260123400019&at=2027-06-01T00:00:00Z" | jq
+
+# The semantic items behind a profile (national subregister)
+curl -s "$BASE/data-elements" | jq
+curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint?at=2027-06-01T00:00:00Z" | jq '.version'
+
+# The supersession chain of a definition
+curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint/supersession" | jq '.chain'
+
+# Operator evidence (Bearer-guarded)
+curl -s -H "Authorization: Bearer $(cat data/admin-token)" "$BASE/admin/log?limit=5" | jq
+```
+
+All reads carry as-of semantics (`?at=`, `x-as-of` header); without
+`at`, the current registered version is returned.
+
+## Enumeration resistance — what this registry does NOT expose
+
+The registry holds *descriptors of services and shapes* — never records
+of things (I12). Specifically:
+
+- **No listing endpoint over identifiers-in-use.** `/applicability` is
+  identity-keyed: the product identity is the input, never the output.
+  A jurisdiction may index identifiers-in-use internally; the standard's
+  requirement (conformance class) is that it do so verifiably without
+  being browsable — predicate access for entitled regulators, no
+  walk-the-registry enumeration.
+- `/items` and the subregisters list **registered definitions** —
+  public ISO 19135 items (data elements, profiles, units) — not
+  passports, not products, not installed base.
+- The audit log is Bearer-guarded operator evidence, not a query index.
+- No passport payloads are stored anywhere in the stack; deposit (where
+  a jurisdiction legislates it) is notarized Tier-C snapshots at a
+  national archivist, and republication never transfers authority (I7).
+
+`bin/demo-jurisdiction.sh` demonstrates each of these against the live
+route table.
+
+## Onboarding as a peer
+
+See `ONBOARDING.md` for the full ceremony: operator credential
+issuance (trust service / Confium threshold keys; the dev keyring seam
+documented), trust-list entry and master-list admission (T3), discovery
+self-registration (T2), the jurisdiction profile + semantic subregister
+(F4), continuity/succession filing, and the jurisdictional-registry
+operator conformance checklist (19135 governance, signed descriptors,
+enumeration resistance, mirroring, as-of).
+
+## Related repositories
+
+- `unidpp/unidpp-registry` — the service this kit deploys: ISO 19135
+  item registration, versioned supersession, point-in-time resolution,
+  applicability bindings with retroactivity, signed C3/C4/C5 discovery
+  layer.
+- `unidpp/unidpp-pilot-data` — the pilot deployment this kit's seeds are
+  modeled on (working journal, profiles, bindings).
+- `unidpp/unidpp-signatif`, `unidpp/unidpp-trust` — the trust layer the
+  production keyring seam plugs into.
+
+## License
+
+MIT — see LICENSE. The deployed service (`unidpp-registry`) is
+Apache-2.0.
