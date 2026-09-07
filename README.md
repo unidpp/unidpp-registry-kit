@@ -51,6 +51,7 @@ cross-register mappings); everything data-shaped stays yours.
 |---|---|
 | `bin/run-registry.sh` | Launcher: builds and runs `unidpp-registry` (path dependency `../unidpp-registry`) on a configurable port with a persistent append-only journal, guarded admin mutations, base dataset seeded via the API; optional cloudflared tunnel |
 | `bin/seed-jurisdiction.py` | Seeder parameterized by jurisdiction: the **signed C3 self-descriptor** (service class `registry`, jurisdiction=X), a jurisdiction profile item, a dated applicability binding, sample data-element items |
+| `bin/seed-units.py` | Seeder for the **units subregister** (C1): 48 UnitsML units — SI base (7), SI derived with special names (22) and coherent compounds (m², m³, m/s), prefixed units DPP data points use (g, km, mm, MJ), non-SI units accepted with the SI (min, h, L, t, eV, bar), and DPP-context units (kWh, Wh, Ah, %, g/kg CO2e) — each with quantity kind, QUDT-letter dimension vector, exact conversion where exact (1 kW·h = 3.6 MJ), and a per-unit citation cross-checked against the ISO/IEC 80000 dataset (metanorma/iso-iec-80000) or the BIPM SI Brochure 9th ed. (UnitsDB supplies the ids/names/symbols; ids `unitsml:u:*` in register `unitsml`) |
 | `bin/demo-jurisdiction.sh` | The worked example — a fictional "DE" jurisdiction end-to-end: as-of applicability, supersession, enumeration-resistance posture |
 | `ONBOARDING.md` | The ceremony guide for a country joining the federation: operator credential issuance, trust-list entry, discovery self-registration, continuity/succession filing, the conformance checklist |
 
@@ -69,10 +70,13 @@ cd unidpp-registry-kit
 #    public URL). Journal persists under data/; admin token in data/admin-token.
 bin/run-registry.sh --daemon
 
-# 2. Seed your jurisdiction (ISO 3166-1 alpha-2)
+# 2. Seed the unit inventory (SI + common DPP units; idempotent, 409-tolerant)
+bin/seed-units.py
+
+# 3. Seed your jurisdiction (ISO 3166-1 alpha-2)
 bin/seed-jurisdiction.py --jurisdiction DE
 
-# 3. Or run the whole worked example in one command
+# 4. Or run the whole worked example in one command
 bin/demo-jurisdiction.sh
 ```
 
@@ -103,6 +107,11 @@ curl -s "$BASE/applicability?product_type=gtin:4260123400019&at=2027-06-01T00:00
 # The semantic items behind a profile (national subregister)
 curl -s "$BASE/data-elements" | jq
 curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint?at=2027-06-01T00:00:00Z" | jq '.version'
+
+# The units subregister (C1): what a data point's unit_ref resolves to —
+# symbol, quantity kind, dimension vector, citation, exact conversions
+curl -s "$BASE/units?register=unitsml" | jq '.count'
+curl -s "$BASE/units/unitsml:u:kilowatt_hour" | jq '.manifest'
 
 # The supersession chain of a definition
 curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint/supersession" | jq '.chain'
