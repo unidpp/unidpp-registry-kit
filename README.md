@@ -52,12 +52,14 @@ cross-register mappings); everything data-shaped stays yours.
 | `bin/run-registry.sh` | Launcher: builds and runs `unidpp-registry` (path dependency `../unidpp-registry`) on a configurable port with a persistent append-only journal, guarded admin mutations, base dataset seeded via the API; optional cloudflared tunnel |
 | `bin/seed-jurisdiction.py` | Seeder parameterized by jurisdiction: the **signed C3 self-descriptor** (service class `registry`, jurisdiction=X), a jurisdiction profile item, a dated applicability binding, sample data-element items |
 | `bin/seed-units.py` | Seeder for the **units subregister** (C1): 48 UnitsML units — SI base (7), SI derived with special names (22) and coherent compounds (m², m³, m/s), prefixed units DPP data points use (g, km, mm, MJ), non-SI units accepted with the SI (min, h, L, t, eV, bar), and DPP-context units (kWh, Wh, Ah, %, g/kg CO2e) — each with quantity kind, QUDT-letter dimension vector, exact conversion where exact (1 kW·h = 3.6 MJ), and a per-unit citation cross-checked against the ISO/IEC 80000 dataset (metanorma/iso-iec-80000) or the BIPM SI Brochure 9th ed. (UnitsDB supplies the ids/names/symbols; ids `unitsml:u:*` in register `unitsml`) |
+| `bin/seed-untded.py` | Seeder for the **semantic subregister (F4)**: the full UNTDED 2005 trade data-element directory — 1504 data elements, tags 1000–9649 (1318 active, 186 retired with the directory's replacement notes), the 9 TDED categories — read live from the untded-2005 SSOT (github.com/untded/untded-2005, default `~/src/untded/untded-2005`; the YAML under `data/elements/`). Ids `urn:untded:de:<tag>` in register `untded`; each manifest carries tag, name, representation (`an..35` decomposed into charset/lengths), the D05B UN/EDIFACT element name where the join resolves (586 elements), the edition citation (ECE/TRADE/362 = ISO 7372:2005, section + page + untded.org element page), the source lifecycle state, change tag, old/business names and legacy bridges |
 | `bin/demo-jurisdiction.sh` | The worked example — a fictional "DE" jurisdiction end-to-end: as-of applicability, supersession, enumeration-resistance posture |
 | `ONBOARDING.md` | The ceremony guide for a country joining the federation: operator credential issuance, trust-list entry, discovery self-registration, continuity/succession filing, the conformance checklist |
 
 Prerequisites: Rust toolchain (to build the registry; a prebuilt binary
-is reused if present), Python 3.9+ with `cryptography`, `curl`, `jq`.
-`cloudflared` only if you pass `--tunnel`.
+is reused if present), Python 3.9+ with `cryptography` (`PyYAML` as
+well, for the UNTDED seed), `curl`, `jq`. `cloudflared` only if you
+pass `--tunnel`.
 
 ## What to run
 
@@ -73,10 +75,15 @@ bin/run-registry.sh --daemon
 # 2. Seed the unit inventory (SI + common DPP units; idempotent, 409-tolerant)
 bin/seed-units.py
 
-# 3. Seed your jurisdiction (ISO 3166-1 alpha-2)
+# 3. Seed the UNTDED 2005 directory (1504 trade data elements, register
+#    `untded`; requires the untded-2005 SSOT checkout, see the table above
+#    — idempotent, 409-tolerant)
+bin/seed-untded.py
+
+# 4. Seed your jurisdiction (ISO 3166-1 alpha-2)
 bin/seed-jurisdiction.py --jurisdiction DE
 
-# 4. Or run the whole worked example in one command
+# 5. Or run the whole worked example in one command
 bin/demo-jurisdiction.sh
 ```
 
@@ -107,6 +114,11 @@ curl -s "$BASE/applicability?product_type=gtin:4260123400019&at=2027-06-01T00:00
 # The semantic items behind a profile (national subregister)
 curl -s "$BASE/data-elements" | jq
 curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint?at=2027-06-01T00:00:00Z" | jq '.version'
+
+# The UNTDED 2005 semantic subregister (1504 trade data elements,
+# register `untded`) — e.g. UN/EDIFACT element 1000 documentName:
+curl -s "$BASE/data-elements?register=untded" | jq '.count'
+curl -s "$BASE/data-elements/urn:untded:de:1000" | jq '.manifest'
 
 # The units subregister (C1): what a data point's unit_ref resolves to —
 # symbol, quantity kind, dimension vector, citation, exact conversions
