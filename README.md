@@ -53,6 +53,7 @@ cross-register mappings); everything data-shaped stays yours.
 | `bin/seed-jurisdiction.py` | Seeder parameterized by jurisdiction: the **signed C3 self-descriptor** (service class `registry`, jurisdiction=X), a jurisdiction profile item, a dated applicability binding, sample data-element items |
 | `bin/seed-units.py` | Seeder for the **units subregister** (C1): 48 UnitsML units — SI base (7), SI derived with special names (22) and coherent compounds (m², m³, m/s), prefixed units DPP data points use (g, km, mm, MJ), non-SI units accepted with the SI (min, h, L, t, eV, bar), and DPP-context units (kWh, Wh, Ah, %, g/kg CO2e) — each with quantity kind, QUDT-letter dimension vector, exact conversion where exact (1 kW·h = 3.6 MJ), and a per-unit citation cross-checked against the ISO/IEC 80000 dataset (metanorma/iso-iec-80000) or the BIPM SI Brochure 9th ed. (UnitsDB supplies the ids/names/symbols; ids `unitsml:u:*` in register `unitsml`) |
 | `bin/seed-untded.py` | Seeder for the **semantic subregister (F4)**: the full UNTDED 2005 trade data-element directory — 1504 data elements, tags 1000–9649 (1318 active, 186 retired with the directory's replacement notes), the 9 TDED categories — read live from the untded-2005 SSOT (github.com/untded/untded-2005, default `~/src/untded/untded-2005`; the YAML under `data/elements/`). Ids `urn:untded:de:<tag>` in register `untded`; each manifest carries tag, name, representation (`an..35` decomposed into charset/lengths), the D05B UN/EDIFACT element name where the join resolves (586 elements), the edition citation (ECE/TRADE/362 = ISO 7372:2005, section + page + untded.org element page), the source lifecycle state, change tag, old/business names and legacy bridges |
+| `bin/seed-mappings.py` | Seeder for the **cross-register mappings** (ISO 19135 harmonization, registry item 57): deposits the GB 4943.1-2022 ↔ IEC 62368-1 equivalence (`urn:unidpp:map:gb4943-iec62368`, register `unidpp`) through the registry's dedicated cross-register-mapping item class — both endpoint items registered first, referentially intact (the registry's intake check rejects dangling ends); verifies via the directional lookup from both directions. Idempotent, 409-tolerant |
 | `bin/demo-jurisdiction.sh` | The worked example — a fictional "DE" jurisdiction end-to-end: as-of applicability, supersession, enumeration-resistance posture |
 | `ONBOARDING.md` | The ceremony guide for a country joining the federation: operator credential issuance, trust-list entry, discovery self-registration, continuity/succession filing, the conformance checklist |
 
@@ -80,10 +81,15 @@ bin/seed-units.py
 #    — idempotent, 409-tolerant)
 bin/seed-untded.py
 
-# 4. Seed your jurisdiction (ISO 3166-1 alpha-2)
+# 4. Seed the cross-register mappings (GB 4943.1-2022 ↔ IEC 62368-1
+#    equivalence through the dedicated item class — idempotent,
+#    409-tolerant)
+bin/seed-mappings.py
+
+# 5. Seed your jurisdiction (ISO 3166-1 alpha-2)
 bin/seed-jurisdiction.py --jurisdiction DE
 
-# 5. Or run the whole worked example in one command
+# 6. Or run the whole worked example in one command
 bin/demo-jurisdiction.sh
 ```
 
@@ -124,6 +130,12 @@ curl -s "$BASE/data-elements/urn:untded:de:1000" | jq '.manifest'
 # symbol, quantity kind, dimension vector, citation, exact conversions
 curl -s "$BASE/units?register=unitsml" | jq '.count'
 curl -s "$BASE/units/unitsml:u:kilowatt_hour" | jq '.manifest'
+
+# Cross-register mappings (ISO 19135 harmonization): the GB↔IEC
+# equivalence from either direction, or by the named sides —
+# ?item= matches both ends; ?source=/&target= the named direction
+curl -s "$BASE/cross-register-mappings?item=gb-4943-1" | jq
+curl -s "$BASE/cross-register-mappings?source=gb-4943-1&target=iec-62368-1" | jq '.mappings[].manifest'
 
 # The supersession chain of a definition
 curl -s "$BASE/data-elements/urn:unidpp:de:battery-carbon-footprint/supersession" | jq '.chain'
