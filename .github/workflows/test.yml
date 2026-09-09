@@ -1,0 +1,25 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check every operator script
+        run: |
+          set -eu
+          for f in bin/*.sh; do
+            bash -n "$f"
+            echo "ok: $f"
+          done
+      - name: Compile-check every seed script
+        run: |
+          set -eu
+          for f in bin/*.py; do
+            python3 -m py_compile "$f"
+            echo "ok: $f"
+          done
