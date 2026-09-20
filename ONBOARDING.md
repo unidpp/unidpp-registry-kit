@@ -82,7 +82,7 @@ jurisdiction set to your ISO 3166-1 alpha-2 code. This is exactly what
 deployment:
 
 ```sh
-bin/run-registry.sh --daemon
+cargo run --release --bin unidpp-kit -- start --daemon
 bin/seed-jurisdiction.py --jurisdiction DE
 curl -s 'http://127.0.0.1:8391/services?jurisdiction=DE&class=registry' | jq
 ```
