@@ -1,0 +1,9 @@
+[package]
+name = "unidpp-kit"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "The registry-kit launcher as a program: it builds, launches, seeds and supervises a jurisdictional unidpp-registry peer, and it runs the jurisdiction demonstration (the successor of bin/run-registry.sh and bin/demo-jurisdiction.sh)"
+
+[dependencies]
+serde_json = "1"

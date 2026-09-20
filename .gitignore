@@ -1,3 +1,6 @@
+# Rust build output of the kit launcher itself.
+/target
+
 # Runtime home: journals, logs, pid files, generated admin tokens,
 # cloudflared artifacts. Everything here is instance state, never source.
 data/
