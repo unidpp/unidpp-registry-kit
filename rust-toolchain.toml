@@ -1,0 +1,6 @@
+[toolchain]
+# The operator's local Rust generation. CI installs this exact
+# toolchain, so the rustfmt that gates a push is the rustfmt the
+# commits were written under (the cross-generation drift class the
+# 251 pass met).
+channel = "1.98.0"
