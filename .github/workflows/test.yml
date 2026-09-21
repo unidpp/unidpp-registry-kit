@@ -26,7 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # No toolchain step: rustup resolves rust-toolchain.toml at
+      # every cargo invocation, so CI installs and formats with the
+      # exact pinned generation (the file is the single source).
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
