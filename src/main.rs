@@ -1,11 +1,10 @@
 #![allow(clippy::zombie_processes)] // daemons by design: see the module doc
 //! The registry-kit launcher, as a program (TODO 246: the durability
-//! contract is a program). This binary is the successor of the kit's
-//! two operator scripts: `bin/run-registry.sh` (build and run the
-//! unidpp-registry sibling service as a federation peer) and
-//! `bin/demo-jurisdiction.sh` (the jurisdiction demonstration, ported
-//! in [`demo`]). The scripts stay in place until the retirement
-//! change; this program reproduces their subcommands, their
+//! contract is a program). This binary succeeds the kit's two operator
+//! scripts (retired with the family's shell-free pass): the run script
+//! (build and launch the unidpp-registry sibling as a federation peer)
+//! and the demonstration script (the jurisdiction demonstration,
+//! ported in [`demo`]). It reproduces their subcommands, their
 //! environment knobs and their files under `data/` exactly.
 //!
 //! The registry, the tunnel and the foreground seeding helper are
@@ -28,8 +27,9 @@
 //!   unidpp-kit demo-jurisdiction [--jurisdiction DE]
 //!
 //! Configuration (environment):
-//!   KIT_PORT            listen port            (default 8391; the UniDPP
-//!                       pilot registry lives on 8390 — pick your own)
+//!   KIT_PORT            listen port            (default 8491; the
+//!                       reference deployment owns 8389–8399, so the
+//!                       kit defaults outside that range)
 //!   KIT_BIND            listen address         (default 127.0.0.1)
 //!   KIT_HOME            runtime state dir      (default <kit>/data)
 //!   KIT_REGISTRY_DIR    unidpp-registry source (default <kit>/../unidpp-registry)
@@ -60,7 +60,7 @@ pub struct Kit {
     home: PathBuf,
     /// The unidpp-registry source checkout (`KIT_REGISTRY_DIR`).
     registry_dir: PathBuf,
-    /// The listen port (`KIT_PORT`, default 8391).
+    /// The listen port (`KIT_PORT`, default 8491).
     port: u16,
     /// The listen address (`KIT_BIND`, default 127.0.0.1).
     bind: String,
@@ -75,7 +75,7 @@ impl Kit {
                 .filter(|v| !v.is_empty())
                 .unwrap_or(default)
         };
-        let port = env_or("KIT_PORT", "8391".into());
+        let port = env_or("KIT_PORT", "8491".into());
         let port = port
             .parse::<u16>()
             .unwrap_or_else(|_| die(&format!("KIT_PORT must be a port number (got `{port}`)")));
@@ -129,14 +129,14 @@ impl Kit {
 /// The kit root, discovered the way the pilot discovers its directory:
 /// the binary lives at `<kit>/target/(debug|release)/`, so the kit is
 /// two levels up from the executable; a checkout that does not hold
-/// `bin/run-registry.sh` is not the kit, and the working directory
-/// stands in for an installed binary.
+/// the seeder the launcher drives is not the kit, and the working
+/// directory stands in for an installed binary.
 fn kit_root() -> PathBuf {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf))
         .and_then(|dir| dir.ancestors().nth(2).map(Path::to_path_buf))
-        .filter(|p| p.join("bin").join("run-registry.sh").is_file())
+        .filter(|p| p.join("bin").join("seed-jurisdiction.py").is_file())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
 }
 
@@ -176,6 +176,43 @@ fn healthz(kit: &Kit) -> bool {
         .is_some_and(|r| (200..400).contains(&r.status))
 }
 
+/// What answers on the kit's port. The adopt-or-start decision keys on
+/// identity, not liveness: with the kit's old default port the probe
+/// adopted the pilot's trust service — a fellow `/healthz` responder —
+/// and the seeder then posted its descriptors into the wrong service.
+/// The contract's title is the identity marker (the 228 gates pin it
+/// to `UniDPP registry` on every build).
+enum Listener {
+    /// a unidpp-registry serves the port
+    Ours,
+    /// something answers `/healthz` but is not a unidpp-registry
+    Foreign,
+    /// nothing answers
+    Down,
+}
+
+fn probe(kit: &Kit) -> Listener {
+    if !healthz(kit) {
+        return Listener::Down;
+    }
+    let ours =
+        http::get(&kit.bind, kit.port, "/openapi.yaml", Duration::from_secs(5)).is_some_and(|r| {
+            (200..300).contains(&r.status) && r.body.contains("title: UniDPP registry")
+        });
+    if ours {
+        Listener::Ours
+    } else {
+        Listener::Foreign
+    }
+}
+
+fn refuse_foreign(kit: &Kit) -> ! {
+    die(&format!(
+        "port {} is answered by a service that is not a unidpp-registry; the kit adopts only its own kind — set KIT_PORT to a free port",
+        kit.port
+    ))
+}
+
 fn wait_healthy(kit: &Kit) {
     // The shell polled 50 × 0.2 s (10 s); that budget no longer holds.
     // A first start of the sibling registry deposits the vendored
@@ -185,10 +222,13 @@ fn wait_healthy(kit: &Kit) {
     // widened. The pilot's ops crate budgets 60 s (120 × 0.5 s) for
     // this same service, and this port follows the family number.
     for _ in 0..120 {
-        if healthz(kit) {
-            return;
+        match probe(kit) {
+            Listener::Ours => return,
+            // A foreign listener does not clear by waiting: the spawn
+            // below failed to bind and the squatter won the port.
+            Listener::Foreign => refuse_foreign(kit),
+            Listener::Down => std::thread::sleep(Duration::from_millis(500)),
         }
-        std::thread::sleep(Duration::from_millis(500));
     }
     die(&format!(
         "registry did not become healthy on {} (see {})",
@@ -356,40 +396,44 @@ fn cmd_seed(kit: &Kit) {
 pub(crate) fn start_daemon(kit: &Kit) {
     ensure_binary(kit);
     let token = ensure_admin_token(kit);
-    if healthz(kit) {
-        println!(
-            "==> a registry is already listening on {} (reusing it)",
-            kit.url()
-        );
-    } else {
-        println!("==> starting unidpp-registry (daemon) on {}", kit.url());
-        println!("    journal: {}", kit.journal().display());
-        println!("    log:     {}", kit.log().display());
-        let log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(kit.log())
-            .unwrap_or_else(|e| die(&format!("log file: {e}")));
-        // `nohup env … "$BIN" &` in the shell: the child runs detached
-        // in its own process group (so the pid the launcher records is
-        // the server's own pid, and the server survives the launcher).
-        let mut command = Command::new(kit.bin());
-        command
-            .env("UNIDPP_REGISTRY_BIND", format!("{}:{}", kit.bind, kit.port))
-            .env("UNIDPP_REGISTRY_STATE_FILE", kit.journal())
-            .env("UNIDPP_REGISTRY_ADMIN_TOKEN", &token)
-            .stdout(
-                log.try_clone()
-                    .unwrap_or_else(|e| die(&format!("log handle: {e}"))),
-            )
-            .stderr(log)
-            .process_group(0);
-        let child = command
-            .spawn()
-            .unwrap_or_else(|e| die(&format!("unidpp-registry failed to start: {e}")));
-        std::fs::write(kit.pid_file(), child.id().to_string())
-            .unwrap_or_else(|e| die(&format!("pid file: {e}")));
-        wait_healthy(kit);
+    match probe(kit) {
+        Listener::Ours => {
+            println!(
+                "==> a unidpp-registry is already listening on {} (reusing it)",
+                kit.url()
+            );
+        }
+        Listener::Foreign => refuse_foreign(kit),
+        Listener::Down => {
+            println!("==> starting unidpp-registry (daemon) on {}", kit.url());
+            println!("    journal: {}", kit.journal().display());
+            println!("    log:     {}", kit.log().display());
+            let log = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(kit.log())
+                .unwrap_or_else(|e| die(&format!("log file: {e}")));
+            // `nohup env … "$BIN" &` in the shell: the child runs detached
+            // in its own process group (so the pid the launcher records is
+            // the server's own pid, and the server survives the launcher).
+            let mut command = Command::new(kit.bin());
+            command
+                .env("UNIDPP_REGISTRY_BIND", format!("{}:{}", kit.bind, kit.port))
+                .env("UNIDPP_REGISTRY_STATE_FILE", kit.journal())
+                .env("UNIDPP_REGISTRY_ADMIN_TOKEN", &token)
+                .stdout(
+                    log.try_clone()
+                        .unwrap_or_else(|e| die(&format!("log handle: {e}"))),
+                )
+                .stderr(log)
+                .process_group(0);
+            let child = command
+                .spawn()
+                .unwrap_or_else(|e| die(&format!("unidpp-registry failed to start: {e}")));
+            std::fs::write(kit.pid_file(), child.id().to_string())
+                .unwrap_or_else(|e| die(&format!("pid file: {e}")));
+            wait_healthy(kit);
+        }
     }
     seed_base_dataset(kit, &token);
     println!(
@@ -406,13 +450,17 @@ pub(crate) fn start_daemon(kit: &Kit) {
 fn start_foreground(kit: &Kit) -> ! {
     ensure_binary(kit);
     let token = ensure_admin_token(kit);
-    if healthz(kit) {
-        println!(
-            "==> a registry is already listening on {} (reusing it)",
-            kit.url()
-        );
-        seed_base_dataset(kit, &token);
-        std::process::exit(0);
+    match probe(kit) {
+        Listener::Ours => {
+            println!(
+                "==> a unidpp-registry is already listening on {} (reusing it)",
+                kit.url()
+            );
+            seed_base_dataset(kit, &token);
+            std::process::exit(0);
+        }
+        Listener::Foreign => refuse_foreign(kit),
+        Listener::Down => {}
     }
     // Seed over the API just after the server comes up, then hand the
     // terminal to the server process. The shell ran the seeding loop in
@@ -505,7 +553,7 @@ fn start_tunnel(kit: &Kit) {
          through a named tunnel or its own ingress, e.g.:\n\n      \
          cloudflared tunnel create jurisdiction-de\n      \
          cloudflared tunnel route dns jurisdiction-de registry.example.org\n      \
-         cloudflared tunnel run --token <token> --url http://127.0.0.1:8391\n\n    \
+         cloudflared tunnel run --token <token> --url http://127.0.0.1:8491\n\n    \
          Nothing in the kit or the federation protocol requires a tunnel:\n    \
          peers verify signatures and as-of semantics, not hosting location.\n"
     );

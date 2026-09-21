@@ -42,7 +42,7 @@ script verifies through `GET /units` that every seeded id resolves and
 asserts the count.
 
 Usage:
-  bin/seed-units.py                       # against 127.0.0.1:8391
+  bin/seed-units.py                       # against 127.0.0.1:8491
   bin/seed-units.py --port 8392 --register unitsml-de
 
 Requires: Python 3.9+ (stdlib only).
@@ -385,7 +385,7 @@ def main():
     kit_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int,
-                    default=int(os.environ.get("KIT_PORT", "8391")))
+                    default=int(os.environ.get("KIT_PORT", "8491")))
     ap.add_argument("--bind", default=os.environ.get("KIT_BIND", "127.0.0.1"))
     ap.add_argument("--base-url", default=None,
                     help="default http://$BIND:$PORT")
@@ -406,7 +406,7 @@ def main():
 
     status, _ = api.get("/healthz")
     if status != 200:
-        sys.exit("no healthy registry at %s — run bin/run-registry.sh first" % base)
+        sys.exit("no healthy registry at %s — run unidpp-kit start --daemon first" % base)
 
     # internal consistency: unique ids, dimension vectors well-formed
     # (8 components in QUDT order L M T E H A I D, each letter + integer)

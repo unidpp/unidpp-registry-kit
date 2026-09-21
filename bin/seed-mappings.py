@@ -45,7 +45,7 @@ script verifies through the directional lookup
 mapping resolves from both directions and by the named sides.
 
 Usage:
-  bin/seed-mappings.py                     # against 127.0.0.1:8391
+  bin/seed-mappings.py                     # against 127.0.0.1:8491
   bin/seed-mappings.py --port 8390         # against the pilot registry
   bin/seed-mappings.py --register unidpp   # mapping item's register
 
@@ -217,7 +217,7 @@ def main():
     kit_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int,
-                    default=int(os.environ.get("KIT_PORT", "8391")))
+                    default=int(os.environ.get("KIT_PORT", "8491")))
     ap.add_argument("--bind", default=os.environ.get("KIT_BIND", "127.0.0.1"))
     ap.add_argument("--base-url", default=None,
                     help="default http://$BIND:$PORT")
@@ -238,7 +238,7 @@ def main():
 
     status, _ = api.get("/healthz")
     if status != 200:
-        sys.exit("no healthy registry at %s — run bin/run-registry.sh first" % base)
+        sys.exit("no healthy registry at %s — run unidpp-kit start --daemon first" % base)
 
     print("unidpp-registry-kit: seeding GB 4943.1-2022 ↔ IEC 62368-1 as a "
           "cross-register-mapping item into %s (register `%s`)"

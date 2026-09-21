@@ -350,7 +350,7 @@ def main():
     ap.add_argument("--jurisdiction", required=True,
                     help="ISO 3166-1 alpha-2 code, e.g. DE, JP")
     ap.add_argument("--port", type=int,
-                    default=int(os.environ.get("KIT_PORT", "8391")))
+                    default=int(os.environ.get("KIT_PORT", "8491")))
     ap.add_argument("--bind", default=os.environ.get("KIT_BIND", "127.0.0.1"))
     ap.add_argument("--base-url", default=None,
                     help="default http://$BIND:$PORT")
@@ -382,10 +382,10 @@ def main():
     api = Registry(base, token or "")
 
     # The registry must be up and its base dataset (protocol bindings,
-    # units) present — bin/run-registry.sh does both.
+    # units) present — unidpp-kit start does both.
     status, _ = api.get("/healthz")
     if status != 200:
-        sys.exit("no healthy registry at %s — run bin/run-registry.sh first" % base)
+        sys.exit("no healthy registry at %s — run unidpp-kit start --daemon first" % base)
 
     operator = Operator(args.operator_label)
     register = args.register or ("jurisdiction-%s" % jur.lower())
@@ -410,7 +410,7 @@ def main():
     print("-", ensure_binding(api, jur, profile_id, args.product_type))
 
     print()
-    print("next (see bin/demo-jurisdiction.sh):")
+    print("next (see unidpp-kit demo-jurisdiction):")
     print("  curl -s '%s/services?jurisdiction=%s&class=registry' | jq" % (base, jur))
     print("  curl -s '%s/applicability?product_type=%s&at=2027-06-01T00:00:00Z' | jq" % (
         base, urllib.parse.quote(args.product_type, safe=":")))

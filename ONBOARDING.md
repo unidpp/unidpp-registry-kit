@@ -84,7 +84,7 @@ deployment:
 ```sh
 cargo run --release --bin unidpp-kit -- start --daemon
 bin/seed-jurisdiction.py --jurisdiction DE
-curl -s 'http://127.0.0.1:8391/services?jurisdiction=DE&class=registry' | jq
+curl -s 'http://127.0.0.1:8491/services?jurisdiction=DE&class=registry' | jq
 ```
 
 The descriptor body carries:

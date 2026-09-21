@@ -133,9 +133,17 @@ pub fn run(kit: &Kit, jurisdiction: &str) {
 
     hr(&format!("[2] seed jurisdiction {jurisdiction}"));
     let script = kit.root().join("bin").join("seed-jurisdiction.py");
+    // The seeder targets the registry the launcher itself chose: the
+    // port rides as an argument (and in the environment), never the
+    // script's fallback default.
+    let port = kit.port().to_string();
     let seeded = Command::new("python3")
         .arg(&script)
         .args(["--jurisdiction", jurisdiction])
+        .args(["--bind", &kit.bind])
+        .args(["--port", &port])
+        .env("KIT_PORT", &port)
+        .env("KIT_BIND", &kit.bind)
         .status()
         .map(|s| s.success())
         .unwrap_or(false);

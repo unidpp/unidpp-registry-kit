@@ -96,8 +96,10 @@ cargo run --release --bin unidpp-kit -- demo-jurisdiction
 `cargo run --release --bin unidpp-kit -- start stop` stops a daemon; the journal is never removed —
 restart replays it (durability and auditability are the same mechanism).
 
-Configuration (environment): `KIT_PORT` (default 8391; the UniDPP pilot
-lives on 8390), `KIT_BIND`, `KIT_HOME`, `KIT_REGISTRY_DIR`,
+Configuration (environment): `KIT_PORT` (default 8491; the reference
+deployment owns 8389-8399, so the kit defaults outside that range and
+adopts only a listener whose contract names `UniDPP registry`),
+`KIT_BIND`, `KIT_HOME`, `KIT_REGISTRY_DIR`,
 `KIT_ADMIN_TOKEN` (default: generated once into `data/admin-token`),
 `KIT_FORCE_BUILD=1`.
 
@@ -107,7 +109,7 @@ The registry is `unidpp-registry` — full API semantics in its README.
 The queries a federation peer or verifier runs:
 
 ```sh
-BASE=http://127.0.0.1:8391
+BASE=http://127.0.0.1:8491
 
 # Discovery: which registry serves jurisdiction DE, at which endpoint,
 # under which wire grammar, signed by whom?
