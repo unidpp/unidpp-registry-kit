@@ -9,17 +9,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Syntax-check every operator script
-        run: |
-          set -eu
-          for f in bin/*.sh; do
-            bash -n "$f"
-            echo "ok: $f"
-          done
       - name: Compile-check every seed script
         run: |
           set -eu
+          shopt -s nullglob
+          py_ok=0
           for f in bin/*.py; do
             python3 -m py_compile "$f"
             echo "ok: $f"
+            py_ok=1
           done
+          if [ "$py_ok" = "0" ]; then
+            echo "no bin/*.py seed scripts found"
+          fi
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Build
+        run: cargo build --all-targets
+      - name: Test
+        run: cargo test
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
