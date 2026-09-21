@@ -109,6 +109,23 @@ class Operator:
             "value": self._sk.sign(payload).hex(),
         })
 
+    def sign_manifest(self, manifest: dict, issuer_class: str = "law") -> dict:
+        """Complete a profile manifest in its SIGNED form (PR-1): the
+        issuer class grades what the issuer may claim — a national
+        registry authority's jurisdictional profile is law — the
+        issuer names the signer of record, and the signature covers
+        the manifest's bytes (its signature slot excluded)."""
+        manifest = dict(manifest)
+        manifest["issuer_class"] = issuer_class
+        manifest["issuer"] = self.key_id
+        payload = canonical(manifest)
+        manifest["signature"] = {
+            "suite": "ed25519",
+            "key_id": self.key_id,
+            "signature": self._sk.sign(payload).hex(),
+        }
+        return manifest
+
 
 class Registry:
     def __init__(self, base_url: str, token: str):
@@ -176,7 +193,7 @@ def ensure_service(api: Registry, operator: Operator, jur: str,
                      % (status, json.dumps(resp)[:400]))
 
 
-def ensure_profile(api: Registry, jur: str, register: str,
+def ensure_profile(api: Registry, operator: Operator, jur: str, register: str,
                    elements: list) -> tuple:
     """Register the jurisdictional profile item (class profile)."""
     jl = jur.lower()
@@ -196,6 +213,7 @@ def ensure_profile(api: Registry, jur: str, register: str,
             "axes": ["jurisdiction"],
             "data_points": [
                 {"element": e["item_id"], "cardinality": "1",
+                 "min_capability": e["min_capability"],
                  "required_provenance": e["provenance"],
                  "subject_granularity": e["granularity"],
                  "trust_floor": e["trust_floor"]}
@@ -217,6 +235,7 @@ def ensure_profile(api: Registry, jur: str, register: str,
             }],
         },
     }
+    body["manifest"] = operator.sign_manifest(body["manifest"])
     status, resp = api.post("/profiles", body)
     if status == 201:
         return item_id, "registered profile `%s` (audit_seq %s)" % (
@@ -240,7 +259,7 @@ def sample_elements(jur: str) -> list:
                           "the applicable delegated regulation (kg CO2e "
                           "per battery, life-cycle)",
             "provenance": "attested", "granularity": "instance",
-            "trust_floor": "attested",
+            "trust_floor": "attested", "min_capability": "S1",
             "manifest": {"version": "1.0.0", "unit_ref": "unit-kg",
                          "datatype": "decimal(9,3)",
                          "representation": "ISO 80000-1 quantity value",
@@ -252,7 +271,7 @@ def sample_elements(jur: str) -> list:
                           "in the active material of the battery, percent "
                           "by mass",
             "provenance": "attested", "granularity": "type",
-            "trust_floor": "attested",
+            "trust_floor": "attested", "min_capability": "S1",
             "manifest": {"version": "1.0.0", "unit_ref": None,
                          "datatype": "decimal(5,2)",
                          "representation": "percentage 0-100",
@@ -264,7 +283,7 @@ def sample_elements(jur: str) -> list:
                           "verification report covering raw-material "
                           "supply chains of the battery",
             "provenance": "log_anchored", "granularity": "type",
-            "trust_floor": "log_anchored",
+            "trust_floor": "log_anchored", "min_capability": "S1",
             "manifest": {"version": "1.0.0", "unit_ref": None,
                          "datatype": "uri",
                          "representation": "signed document reference",
@@ -385,7 +404,7 @@ def main():
     for line in ensure_elements(api, jur, register, elements):
         print("-", line)
 
-    profile_id, line = ensure_profile(api, jur, register, elements)
+    profile_id, line = ensure_profile(api, operator, jur, register, elements)
     print("-", line)
 
     print("-", ensure_binding(api, jur, profile_id, args.product_type))

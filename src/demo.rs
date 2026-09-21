@@ -111,9 +111,15 @@ fn get_json(kit: &Kit, path: &str) -> Value {
 
 pub fn run(kit: &Kit, jurisdiction: &str) {
     let base = format!("http://127.0.0.1:{}", kit.port());
+    let element_path = format!("/data-elements/{ELEMENT}");
+
+    hr("[1] bring up the registry");
+    start_daemon(kit);
+
     // The admin token for the supersession POST: the file the launcher
     // generated (honouring KIT_HOME), or KIT_ADMIN_TOKEN when the
-    // operator supplied one and no file exists yet.
+    // operator supplied one and no file exists yet. Read AFTER the
+    // launcher ran — a fresh home has no token until it starts.
     let token = std::fs::read_to_string(kit.token_file())
         .ok()
         .map(|t| t.trim().to_string())
@@ -124,10 +130,6 @@ pub fn run(kit: &Kit, jurisdiction: &str) {
                 .filter(|t| !t.is_empty())
         })
         .unwrap_or_default();
-    let element_path = format!("/data-elements/{ELEMENT}");
-
-    hr("[1] bring up the registry");
-    start_daemon(kit);
 
     hr(&format!("[2] seed jurisdiction {jurisdiction}"));
     let script = kit.root().join("bin").join("seed-jurisdiction.py");
