@@ -696,7 +696,9 @@ fn cmd_start(kit: &Kit, daemon: bool, tunnel: bool) {
 fn usage() -> ! {
     die(
         "usage: unidpp-kit [start [--daemon] [--tunnel]] | stop | status | seed \
-         | demo-jurisdiction [--jurisdiction DE]",
+         | demo-jurisdiction [--jurisdiction DE] \
+         | seed-jurisdiction --jurisdiction DE | seed-mappings | seed-units \
+         | seed-untded [--limit N]",
     )
 }
 
