@@ -7,3 +7,6 @@ description = "The registry-kit launcher as a program: it builds, launches, seed
 
 [dependencies]
 serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+ed25519-dalek = "2"

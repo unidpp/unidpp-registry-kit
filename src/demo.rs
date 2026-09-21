@@ -12,12 +12,11 @@
 //!   [6] enumeration resistance — what this registry does NOT expose
 //!
 //! Re-runnable: every step is idempotent (409s are tolerated, bindings
-//! are checked before creation). Step [2] still delegates to
-//! `bin/seed-jurisdiction.py`, exactly as the shell script did: the
-//! seeding signs the C3 self-descriptor with an Ed25519 key, and that
-//! operation lives in the Python seeding tool, not in this launcher.
+//! are checked before creation). Step [2] drives the seeding suite
+//! directly: seeding signs the C3 self-descriptor with an Ed25519 key,
+//! in process, through the same code the `seed-jurisdiction`
+//! subcommand exposes.
 
-use std::process::Command;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -110,7 +109,7 @@ fn get_json(kit: &Kit, path: &str) -> Value {
 }
 
 pub fn run(kit: &Kit, jurisdiction: &str) {
-    let base = format!("http://127.0.0.1:{}", kit.port());
+    let base = format!("http://{}:{}", kit.bind, kit.port());
     let element_path = format!("/data-elements/{ELEMENT}");
 
     hr("[1] bring up the registry");
@@ -132,27 +131,23 @@ pub fn run(kit: &Kit, jurisdiction: &str) {
         .unwrap_or_default();
 
     hr(&format!("[2] seed jurisdiction {jurisdiction}"));
-    let script = kit.root().join("bin").join("seed-jurisdiction.py");
     // The seeder targets the registry the launcher itself chose: the
-    // port rides as an argument (and in the environment), never the
-    // script's fallback default.
-    let port = kit.port().to_string();
-    let seeded = Command::new("python3")
-        .arg(&script)
-        .args(["--jurisdiction", jurisdiction])
-        .args(["--bind", &kit.bind])
-        .args(["--port", &port])
-        .env("KIT_PORT", &port)
-        .env("KIT_BIND", &kit.bind)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-    if !seeded {
-        die(&format!(
-            "seeding failed (python3 {} --jurisdiction {jurisdiction})",
-            script.display()
-        ));
-    }
+    // connection rides in the Registry the launcher built, never a
+    // fallback default.
+    let api = crate::seeding::Registry {
+        bind: kit.bind.clone(),
+        port: kit.port(),
+        token: token.clone(),
+    };
+    crate::seeding::jurisdiction::seed(
+        &api,
+        &base,
+        jurisdiction,
+        crate::seeding::DEFAULT_OPERATOR_LABEL,
+        None,
+        "gtin:4260123400019",
+        None,
+    );
 
     hr(&format!(
         "[3] federation discovery: who serves the {jurisdiction} registry? (C3)"

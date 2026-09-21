@@ -45,7 +45,7 @@ single employee's laptop is a single point of compromise).
 - The credential binds: operator id (content-derived from the public
   key), key id, public key, algorithm. One operator id pins exactly one
   key — cross-key forgeries fail content-derivation checks.
-- **In this kit (development):** the descriptor in `bin/seed-jurisdiction.py`
+- **In this kit (development):** the descriptor the `seed-jurisdiction` subcommand signs
   is signed with a deterministic dev key from the unidpp-registry dev
   keyring (`SHA-256("UNIDPP-DISCOVERY/OPERATOR-SEED" || label)`), which
   the reference registry trusts at intake. The production seam is
@@ -78,12 +78,12 @@ will act on your signatures.
 
 Register your registry as a service descriptor — class `registry`,
 jurisdiction set to your ISO 3166-1 alpha-2 code. This is exactly what
-`bin/seed-jurisdiction.py --jurisdiction <CODE>` does against your
+`unidpp-kit seed-jurisdiction --jurisdiction <CODE>` does against your
 deployment:
 
 ```sh
 cargo run --release --bin unidpp-kit -- start --daemon
-bin/seed-jurisdiction.py --jurisdiction DE
+cargo run --release --bin unidpp-kit -- seed-jurisdiction --jurisdiction DE
 curl -s 'http://127.0.0.1:8491/services?jurisdiction=DE&class=registry' | jq
 ```
 

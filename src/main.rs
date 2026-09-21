@@ -24,6 +24,10 @@
 //!   unidpp-kit stop                     # stop a --daemon instance
 //!   unidpp-kit status                   # healthz + journal + service count
 //!   unidpp-kit seed                     # wait for health, then seed once
+//!   unidpp-kit seed-jurisdiction --jurisdiction DE
+//!   unidpp-kit seed-mappings            # the GB/IEC equivalence item
+//!   unidpp-kit seed-units               # the UnitsML inventory
+//!   unidpp-kit seed-untded              # the UNTDED 2005 directory
 //!   unidpp-kit demo-jurisdiction [--jurisdiction DE]
 //!
 //! Configuration (environment):
@@ -39,6 +43,7 @@
 
 mod demo;
 mod http;
+mod seeding;
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -54,16 +59,14 @@ use std::time::Duration;
 // ---------------------------------------------------------------------------
 
 pub struct Kit {
-    /// The kit checkout (the directory that holds `bin/` and `data/`).
-    root: PathBuf,
     /// The runtime state directory (`KIT_HOME`, default `<kit>/data`).
     home: PathBuf,
     /// The unidpp-registry source checkout (`KIT_REGISTRY_DIR`).
     registry_dir: PathBuf,
     /// The listen port (`KIT_PORT`, default 8491).
-    port: u16,
+    pub(crate) port: u16,
     /// The listen address (`KIT_BIND`, default 127.0.0.1).
-    bind: String,
+    pub(crate) bind: String,
 }
 
 impl Kit {
@@ -93,7 +96,6 @@ impl Kit {
             )),
             port,
             bind: env_or("KIT_BIND", "127.0.0.1".into()),
-            root,
         }
     }
 
@@ -118,9 +120,6 @@ impl Kit {
     pub(crate) fn home(&self) -> &Path {
         &self.home
     }
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
-    }
     pub(crate) fn port(&self) -> u16 {
         self.port
     }
@@ -129,14 +128,14 @@ impl Kit {
 /// The kit root, discovered the way the pilot discovers its directory:
 /// the binary lives at `<kit>/target/(debug|release)/`, so the kit is
 /// two levels up from the executable; a checkout that does not hold
-/// the seeder the launcher drives is not the kit, and the working
+/// the kit's onboarding guide is not the kit, and the working
 /// directory stands in for an installed binary.
 fn kit_root() -> PathBuf {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf))
         .and_then(|dir| dir.ancestors().nth(2).map(Path::to_path_buf))
-        .filter(|p| p.join("bin").join("seed-jurisdiction.py").is_file())
+        .filter(|p| p.join("ONBOARDING.md").is_file())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
 }
 
@@ -725,6 +724,10 @@ fn main() {
         Some("stop") => cmd_stop(&kit),
         Some("status") => cmd_status(&kit),
         Some("seed") => cmd_seed(&kit),
+        Some("seed-jurisdiction") => seeding::jurisdiction::run(&kit, &args[1..]),
+        Some("seed-mappings") => seeding::mappings::run(&kit, &args[1..]),
+        Some("seed-units") => seeding::units::run(&kit, &args[1..]),
+        Some("seed-untded") => seeding::untded::run(&kit, &args[1..]),
         Some("demo-jurisdiction") | Some("demo") => {
             let mut jurisdiction = "DE".to_string();
             let mut rest = args[1..].iter();
